@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { Navbar } from '@/components/navbar';
 import { Footer } from '@/components/footer';
 import { Toaster } from '@/components/ui/sonner';
+import { Analytics } from '@vercel/analytics/next';
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
@@ -23,6 +24,7 @@ export default function RootLayout({children}: {children: React.ReactNode}) {
         </main>
         <Footer />
         <Toaster />
+        <Analytics />
       </body>
     </html>
   );
