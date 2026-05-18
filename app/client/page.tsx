@@ -1,23 +1,35 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Search, MapPin, Star, ShieldCheck } from 'lucide-react';
-import { getSabis } from '@/lib/db';
+import { getSabis, type User, type SabiProfile } from '@/lib/db';
 import Link from 'next/link';
 
 export default function ClientDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
-  const sabis = getSabis();
+  const [sabis, setSabis] = useState<(User & { profile: SabiProfile })[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getSabis(searchQuery || undefined).then((data) => {
+      setSabis(data);
+      setLoading(false);
+    });
+  }, [searchQuery]);
 
   const filteredSabis = sabis.filter(sabi => 
     sabi.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     sabi.profile?.skills.some(skill => skill.toLowerCase().includes(searchQuery.toLowerCase()))
   );
+
+  if (loading) {
+    return <div className="text-center py-12">Loading sabis...</div>;
+  }
 
   return (
     <div className="space-y-8">

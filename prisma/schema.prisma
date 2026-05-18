@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String       @id @default(cuid())
+  name         String
+  email        String       @unique
+  passwordHash String
+  role         String       @default("client") // "client" | "sabi" | "admin"
+  phone        String       @default("")
+  location     String       @default("")
+  avatar       String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  sabiProfile  SabiProfile?
+  clientJobs   Job[]        @relation("ClientJobs")
+  sabiJobs     Job[]        @relation("SabiJobs")
+  reviewsGiven Review[]     @relation("ReviewAuthor")
+}
+
+model SabiProfile {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  skills       String   @default("") // comma-separated
+  rating       Float    @default(0)
+  verified     Boolean  @default(false)
+  hourlyRate   Int      @default(0)
+  bio          String   @default("")
+  completedJobs Int     @default(0)
+  createdAt    DateTime @default(now())
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Job {
+  id          String   @id @default(cuid())
+  clientId    String
+  sabiId      String?
+  title       String
+  description String   @default("")
+  status      String   @default("pending") // "pending" | "accepted" | "completed" | "cancelled"
+  price       Int      @default(0)
+  date        DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  client      User     @relation("ClientJobs", fields: [clientId], references: [id])
+  sabi        User?    @relation("SabiJobs", fields: [sabiId], references: [id])
+  reviews     Review[]
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  jobId      String
+  reviewerId String
+  rating     Int
+  comment    String   @default("")
+  createdAt  DateTime @default(now())
+
+  job        Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  reviewer   User     @relation("ReviewAuthor", fields: [reviewerId], references: [id])
+}

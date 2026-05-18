@@ -1,28 +1,74 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ShieldCheck, ShieldAlert, Users, Briefcase, Activity } from 'lucide-react';
-import { getAllUsers, sabiProfiles, jobs } from '@/lib/db';
+import { getAllUsers, verifySabi, getCurrentUser, getJobs, type User, type SabiProfile, type Job } from '@/lib/db';
 import { toast } from 'sonner';
 
 export default function AdminDashboard() {
-  const [users, setUsers] = useState(getAllUsers());
-  const [profiles, setProfiles] = useState(sabiProfiles);
+  const [users, setUsers] = useState<(User & { sabiProfile?: SabiProfile | null })[]>([]);
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const handleVerify = (userId: string) => {
-    setProfiles(profiles.map(p => p.userId === userId ? { ...p, verified: true } : p));
-    toast.success('Sabi Verified', { description: 'The user has been granted verified status.' });
+  useEffect(() => {
+    async function loadData() {
+      const user = await getCurrentUser();
+      setCurrentUser(user);
+      if (user?.role === 'admin') {
+        const [usersData, jobsData] = await Promise.all([
+          getAllUsers(),
+          getJobs(),
+        ]);
+        setUsers(usersData);
+        setJobs(jobsData);
+      }
+      setLoading(false);
+    }
+    loadData();
+  }, []);
+
+  const handleVerify = async (userId: string) => {
+    try {
+      await verifySabi(userId, true);
+      // Refresh user list
+      const usersData = await getAllUsers();
+      setUsers(usersData);
+      toast.success('Sabi Verified', { description: 'The user has been granted verified status.' });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to verify');
+    }
   };
 
-  const handleRevoke = (userId: string) => {
-    setProfiles(profiles.map(p => p.userId === userId ? { ...p, verified: false } : p));
-    toast.warning('Verification Revoked', { description: 'The user has lost verified status.' });
+  const handleRevoke = async (userId: string) => {
+    try {
+      await verifySabi(userId, false);
+      // Refresh user list
+      const usersData = await getAllUsers();
+      setUsers(usersData);
+      toast.warning('Verification Revoked', { description: 'The user has lost verified status.' });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to revoke');
+    }
   };
+
+  if (loading) {
+    return <div className="text-center py-12">Loading admin dashboard...</div>;
+  }
+
+  if (!currentUser || currentUser.role !== 'admin') {
+    return (
+      <div className="text-center py-12">
+        <h1 className="text-2xl font-bold">Admin Dashboard</h1>
+        <p className="text-gray-500 mt-2">You do not have access to this page.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -91,7 +137,7 @@ export default function AdminDashboard() {
                 </TableHeader>
                 <TableBody>
                   {users.filter(u => u.role === 'sabi').map((sabi) => {
-                    const profile = profiles.find(p => p.userId === sabi.id);
+                    const profile = sabi.sabiProfile;
                     return (
                       <TableRow key={sabi.id}>
                         <TableCell className="font-medium">{sabi.name}</TableCell>

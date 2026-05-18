@@ -1,37 +1,73 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Calendar, Clock, MapPin, CheckCircle, XCircle } from 'lucide-react';
-import { getJobsForUser, users, sabiProfiles } from '@/lib/db';
+import { getJobs, getCurrentUser, acceptJob, updateJobStatus, type User, type SabiProfile, type Job } from '@/lib/db';
 import { toast } from 'sonner';
 
 export default function SabiDashboard() {
-  // Mocking logged-in Sabi (Ngozi)
-  const currentSabiId = 'u2';
-  const sabi = users.find(u => u.id === currentSabiId);
-  const profile = sabiProfiles.find(p => p.userId === currentSabiId);
-  
-  const [jobs, setJobs] = useState(getJobsForUser(currentSabiId, 'sabi'));
+  const [currentUser, setCurrentUser] = useState<User & { sabiProfile?: SabiProfile | null } | null>(null);
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const handleStatusChange = (jobId: string, newStatus: 'accepted' | 'cancelled') => {
-    setJobs(jobs.map(job => job.id === jobId ? { ...job, status: newStatus } : job));
-    if (newStatus === 'accepted') {
-      toast.success('Job Accepted', { description: 'The client has been notified.' });
-    } else {
-      toast.info('Job Declined', { description: 'The request has been removed from your queue.' });
+  useEffect(() => {
+    async function loadData() {
+      const user = await getCurrentUser();
+      setCurrentUser(user);
+      if (user && user.role === 'sabi') {
+        const jobsData = await getJobs(user.id, 'sabi');
+        setJobs(jobsData);
+      }
+      setLoading(false);
+    }
+    loadData();
+  }, []);
+
+  const handleStatusChange = async (jobId: string, newStatus: 'accepted' | 'cancelled') => {
+    try {
+      if (newStatus === 'accepted') {
+        await acceptJob(jobId);
+        toast.success('Job Accepted', { description: 'The client has been notified.' });
+      } else {
+        await updateJobStatus(jobId, 'cancelled');
+        toast.info('Job Declined', { description: 'The request has been removed from your queue.' });
+      }
+      // Refresh jobs
+      if (currentUser) {
+        const jobsData = await getJobs(currentUser.id, 'sabi');
+        setJobs(jobsData);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to update job';
+      toast.error(message);
     }
   };
+
+  if (loading) {
+    return <div className="text-center py-12">Loading dashboard...</div>;
+  }
+
+  if (!currentUser || currentUser.role !== 'sabi') {
+    return (
+      <div className="text-center py-12">
+        <h1 className="text-2xl font-bold">Sabi Dashboard</h1>
+        <p className="text-gray-500 mt-2">Please log in as a Sabi to view your dashboard.</p>
+      </div>
+    );
+  }
+
+  const profile = currentUser.sabiProfile;
 
   return (
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Welcome back, {sabi?.name}</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Welcome back, {currentUser.name}</h1>
           <p className="text-gray-500">Manage your jobs and profile.</p>
         </div>
         <div className="flex items-center gap-4">
@@ -60,7 +96,7 @@ export default function SabiDashboard() {
                     <div>
                       <CardTitle>{job.title}</CardTitle>
                       <CardDescription className="mt-1">
-                        Client: {users.find(u => u.id === job.clientId)?.name}
+                        Job ID: {job.id.substring(0, 8)}...
                       </CardDescription>
                     </div>
                     <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
@@ -71,9 +107,8 @@ export default function SabiDashboard() {
                 <CardContent className="space-y-4">
                   <p className="text-sm text-gray-600">{job.description}</p>
                   <div className="flex flex-col gap-2 text-sm text-gray-500">
-                    <div className="flex items-center"><Calendar className="h-4 w-4 mr-2" /> {new Date(job.date).toLocaleDateString()}</div>
-                    <div className="flex items-center"><Clock className="h-4 w-4 mr-2" /> {new Date(job.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-                    <div className="flex items-center"><MapPin className="h-4 w-4 mr-2" /> {users.find(u => u.id === job.clientId)?.location}</div>
+                    {job.date && <div className="flex items-center"><Calendar className="h-4 w-4 mr-2" /> {new Date(job.date).toLocaleDateString()}</div>}
+                    {job.date && <div className="flex items-center"><Clock className="h-4 w-4 mr-2" /> {new Date(job.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>}
                   </div>
                   <div className="pt-4 border-t">
                     <div className="text-sm text-gray-500">Estimated Pay</div>
@@ -106,7 +141,7 @@ export default function SabiDashboard() {
                 </CardHeader>
                 <CardContent>
                   <div className="flex justify-between text-sm text-gray-500">
-                    <span>{new Date(job.date).toLocaleDateString()}</span>
+                    <span>{job.date ? new Date(job.date).toLocaleDateString() : 'No date'}</span>
                     <span className="font-medium text-gray-900">₦{job.price.toLocaleString()}</span>
                   </div>
                 </CardContent>
@@ -124,8 +159,8 @@ export default function SabiDashboard() {
             <CardContent className="space-y-6">
               <div className="flex items-center gap-6">
                 <Avatar className="h-24 w-24">
-                  <AvatarImage src={sabi?.avatar} alt={sabi?.name} />
-                  <AvatarFallback>{sabi?.name.substring(0, 2).toUpperCase()}</AvatarFallback>
+                  <AvatarImage src={currentUser.avatar} alt={currentUser.name} />
+                  <AvatarFallback>{currentUser.name.substring(0, 2).toUpperCase()}</AvatarFallback>
                 </Avatar>
                 <Button variant="outline">Change Photo</Button>
               </div>

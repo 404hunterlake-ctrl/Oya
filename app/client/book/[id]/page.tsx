@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, use } from 'react';
+import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Calendar, Clock, MapPin, ShieldCheck, Star } from 'lucide-react';
-import { getSabis } from '@/lib/db';
+import { getSabiById, createJob, type User, type SabiProfile } from '@/lib/db';
 import Link from 'next/link';
 import { toast } from 'sonner';
 
@@ -18,26 +18,51 @@ export default function BookSabi({ params }: { params: Promise<{ id: string }> }
   const resolvedParams = use(params);
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  const sabis = getSabis();
-  const sabi = sabis.find(s => s.id === resolvedParams.id);
+  const [sabi, setSabi] = useState<(User & { profile: SabiProfile }) | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  if (!sabi) {
-    return <div className="text-center py-12">Sabi not found.</div>;
-  }
+  useEffect(() => {
+    getSabiById(resolvedParams.id).then((data) => {
+      setSabi(data);
+      setLoading(false);
+    });
+  }, [resolvedParams.id]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!sabi) return;
+
+    const formData = new FormData(e.currentTarget);
     setIsSubmitting(true);
-    // Simulate booking
-    setTimeout(() => {
-      setIsSubmitting(false);
+
+    try {
+      await createJob({
+        sabiId: sabi.id,
+        title: formData.get('title') as string,
+        description: formData.get('description') as string,
+        price: 0, // Price to be negotiated
+        date: `${formData.get('date')}T${formData.get('time')}:00Z`,
+      });
+
       toast.success('Booking submitted successfully!', {
         description: `${sabi.name} has been notified and will respond shortly.`
       });
       router.push('/client');
-    }, 1500);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to submit booking';
+      toast.error(message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
+
+  if (loading) {
+    return <div className="text-center py-12">Loading...</div>;
+  }
+
+  if (!sabi) {
+    return <div className="text-center py-12">Sabi not found.</div>;
+  }
 
   return (
     <div className="max-w-3xl mx-auto space-y-8">
@@ -93,13 +118,14 @@ export default function BookSabi({ params }: { params: Promise<{ id: string }> }
               <CardContent className="space-y-6">
                 <div className="space-y-2">
                   <Label htmlFor="title">Job Title</Label>
-                  <Input id="title" placeholder="e.g. Fix leaking kitchen sink" required />
+                  <Input id="title" name="title" placeholder="e.g. Fix leaking kitchen sink" required />
                 </div>
                 
                 <div className="space-y-2">
                   <Label htmlFor="description">Description</Label>
                   <Textarea 
                     id="description" 
+                    name="description"
                     placeholder="Describe the problem or task in detail..." 
                     className="min-h-[120px]"
                     required 
@@ -111,21 +137,21 @@ export default function BookSabi({ params }: { params: Promise<{ id: string }> }
                     <Label htmlFor="date">Date</Label>
                     <div className="relative">
                       <Calendar className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                      <Input id="date" type="date" className="pl-10" required />
+                      <Input id="date" name="date" type="date" className="pl-10" required />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="time">Time</Label>
                     <div className="relative">
                       <Clock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                      <Input id="time" type="time" className="pl-10" required />
+                      <Input id="time" name="time" type="time" className="pl-10" required />
                     </div>
                   </div>
                 </div>
                 
                 <div className="space-y-2">
                   <Label htmlFor="address">Service Address</Label>
-                  <Input id="address" placeholder="Full address where service is needed" required />
+                  <Input id="address" name="address" placeholder="Full address where service is needed" required />
                 </div>
               </CardContent>
               <CardFooter className="bg-gray-50/50 border-t flex justify-end py-4">
