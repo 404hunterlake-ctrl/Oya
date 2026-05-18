@@ -60,6 +60,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Verify the sabi exists and has a SabiProfile
+    const sabi = await prisma.user.findUnique({
+      where: { id: sabiId },
+      include: { sabiProfile: true },
+    });
+    if (!sabi || !sabi.sabiProfile) {
+      return NextResponse.json(
+        { error: 'Invalid sabiId — the specified Sabi does not exist' },
+        { status: 400 }
+      );
+    }
+
     const job = await prisma.job.create({
       data: {
         clientId: user.userId,
@@ -77,8 +89,22 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json(job, { status: 201 });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Create job error:', error);
+    // Handle Prisma foreign key constraint errors
+    const prismaError = error as { code?: string; meta?: { modelName?: string } };
+    if (prismaError.code === 'P2003') {
+      return NextResponse.json(
+        { error: 'Invalid sabiId — the specified Sabi does not exist' },
+        { status: 400 }
+      );
+    }
+    if (prismaError.code === 'P2002') {
+      return NextResponse.json(
+        { error: 'A job with these details already exists' },
+        { status: 409 }
+      );
+    }
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
