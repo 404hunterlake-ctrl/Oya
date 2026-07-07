@@ -1,57 +1,52 @@
+/**
+ * POST /api/auth/login
+ * Sign in with email and password
+ */
+
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
-import { verifyPassword, generateToken } from '@/lib/auth';
+import { supabase } from '@/lib/supabase';
+import { SignInSchema } from '@/lib/validation';
+import { z } from 'zod';
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { email, password } = body;
 
-    if (!email || !password) {
+    // Validate input
+    const { email, password } = SignInSchema.parse(body);
+
+    // Sign in with Supabase Auth
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
       return NextResponse.json(
-        { error: 'Email and password are required' },
+        { error: error.message },
+        { status: 401 }
+      );
+    }
+
+    return NextResponse.json(
+      {
+        user: data.user,
+        session: data.session,
+        message: 'Sign in successful',
+      },
+      { status: 200 }
+    );
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: error.errors[0].message },
         { status: 400 }
       );
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) {
-      return NextResponse.json(
-        { error: 'Invalid email or password' },
-        { status: 401 }
-      );
-    }
-
-    const isValid = await verifyPassword(password, user.passwordHash);
-    if (!isValid) {
-      return NextResponse.json(
-        { error: 'Invalid email or password' },
-        { status: 401 }
-      );
-    }
-
-    const token = await generateToken({
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-    });
-
-    return NextResponse.json({
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        phone: user.phone,
-        location: user.location,
-        avatar: user.avatar,
-      },
-      token,
-    });
-  } catch (error) {
     console.error('Login error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Login failed' },
       { status: 500 }
     );
   }
