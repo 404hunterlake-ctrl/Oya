@@ -1,10 +1,14 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin } from '@/lib/supabase';
+import { verifyToken } from '@/lib/auth';
 
 // Public routes that don't require authentication
 const PUBLIC_GET_ROUTES = [
   '/api/sabis',
   '/api/auth/callback',
+];
+
+const PUBLIC_GET_ROUTE_PREFIXES = [
+  '/api/sabis/',
 ];
 
 const PUBLIC_POST_ROUTES = [
@@ -23,9 +27,12 @@ export async function middleware(req: NextRequest) {
   // Allow public GET routes
   if (
     method === 'GET' &&
-    PUBLIC_GET_ROUTES.some(
+    (PUBLIC_GET_ROUTES.some(
       (route) => pathname === route || pathname.startsWith(route + '/')
-    )
+    ) ||
+    PUBLIC_GET_ROUTE_PREFIXES.some(
+      (prefix) => pathname.startsWith(prefix)
+    ))
   ) {
     return NextResponse.next();
   }
@@ -49,15 +56,9 @@ export async function middleware(req: NextRequest) {
 
   try {
     const token = authHeader.substring(7);
-    const supabase = getSupabaseAdmin();
+    const user = await verifyToken(token);
 
-    // Verify the token with Supabase
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.admin.getUserById(token);
-
-    if (error || !user) {
+    if (!user) {
       return NextResponse.json(
         { error: 'Unauthorized — invalid token' },
         { status: 401 }
@@ -66,8 +67,9 @@ export async function middleware(req: NextRequest) {
 
     // Add user info to request headers for downstream use
     const requestHeaders = new Headers(req.headers);
-    requestHeaders.set('x-user-id', user.id);
-    requestHeaders.set('x-user-email', user.email || '');
+    requestHeaders.set('x-user-id', user.userId);
+    requestHeaders.set('x-user-email', user.email);
+    requestHeaders.set('x-user-role', user.role);
 
     return NextResponse.next({
       request: {

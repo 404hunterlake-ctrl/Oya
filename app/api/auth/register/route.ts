@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { SignUpSchema } from '@/lib/validation';
 import { z } from 'zod';
+import { generateToken } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
   try {
@@ -34,9 +35,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const user = data.user;
+
+    // Generate custom JWT for client-side use
+    const token = await generateToken({
+      userId: user!.id,
+      email: user!.email!,
+      role: role || 'client',
+    });
+
     return NextResponse.json(
       {
-        user: data.user,
+        user: {
+          id: user!.id,
+          email: user!.email,
+          role: role || 'client',
+        },
+        token,
         message: 'Sign up successful. Please check your email to verify your account.',
       },
       { status: 201 }
@@ -44,7 +59,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: error.errors[0].message },
+        { error: error.issues[0].message },
         { status: 400 }
       );
     }

@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { SignInSchema } from '@/lib/validation';
 import { z } from 'zod';
+import { generateToken } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
   try {
@@ -28,10 +29,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const user = data.user;
+    const role = (user?.user_metadata?.role as string) || 'client';
+
+    // Generate custom JWT for client-side use
+    const token = await generateToken({
+      userId: user!.id,
+      email: user!.email!,
+      role,
+    });
+
     return NextResponse.json(
       {
-        user: data.user,
-        session: data.session,
+        user: {
+          id: user!.id,
+          email: user!.email,
+          role,
+        },
+        token,
         message: 'Sign in successful',
       },
       { status: 200 }
@@ -39,7 +54,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: error.errors[0].message },
+        { error: error.issues[0].message },
         { status: 400 }
       );
     }

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { UpdateJobSchema } from '@/lib/validation';
+import { z } from 'zod';
 
 export async function GET(
   _req: NextRequest,
@@ -20,6 +22,16 @@ export async function GET(
 
     if (!job) {
       return NextResponse.json({ error: 'Job not found' }, { status: 404 });
+    }
+
+    const user = await requireAuth(_req);
+    if (
+      !user ||
+      (user.role !== 'admin' &&
+        user.userId !== job.clientId &&
+        user.userId !== job.sabiId)
+    ) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     return NextResponse.json(job);
@@ -44,7 +56,7 @@ export async function PATCH(
 
     const { id } = await params;
     const body = await req.json();
-    const { status } = body;
+    const { status } = UpdateJobSchema.parse(body);
 
     const job = await prisma.job.findUnique({ where: { id } });
     if (!job) {

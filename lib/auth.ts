@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import { NextRequest } from 'next/server';
 
 const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'oya-dev-jwt-secret-fallback'
+  process.env.JWT_SECRET || ''
 );
 
 export interface TokenPayload {
@@ -30,6 +30,10 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
  * Generate a JWT token for a user
  */
 export async function generateToken(payload: TokenPayload): Promise<string> {
+  if (!process.env.JWT_SECRET) {
+    throw new Error('JWT_SECRET is not configured');
+  }
+
   return new SignJWT({ ...payload })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
@@ -42,6 +46,10 @@ export async function generateToken(payload: TokenPayload): Promise<string> {
  */
 export async function verifyToken(token: string): Promise<TokenPayload | null> {
   try {
+    if (!process.env.JWT_SECRET) {
+      return null;
+    }
+
     const { payload } = await jwtVerify(token, JWT_SECRET);
     return {
       userId: payload.userId as string,

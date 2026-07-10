@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { CreateReviewSchema } from '@/lib/validation';
+import { z } from 'zod';
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,21 +12,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { jobId, rating, comment } = body;
-
-    if (!jobId || !rating) {
-      return NextResponse.json(
-        { error: 'jobId and rating are required' },
-        { status: 400 }
-      );
-    }
-
-    if (rating < 1 || rating > 5) {
-      return NextResponse.json(
-        { error: 'Rating must be between 1 and 5' },
-        { status: 400 }
-      );
-    }
+    const { jobId, rating, comment } = CreateReviewSchema.parse(body);
 
     const job = await prisma.job.findUnique({
       where: { id: jobId },
@@ -74,7 +62,9 @@ export async function POST(req: NextRequest) {
         where: { job: { sabiId: job.sabiId } },
       });
       const avgRating =
-        allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length;
+        allReviews.length > 0
+          ? allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length
+          : 0;
 
       await prisma.sabiProfile.updateMany({
         where: { userId: job.sabiId },
