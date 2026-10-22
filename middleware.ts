@@ -1,8 +1,8 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin } from '@/lib/supabase';
+import { verifyToken } from '@/lib/auth';
 
-// Public routes that don't require authentication
 const PUBLIC_GET_ROUTES = [
+  '/api/health',
   '/api/sabis',
   '/api/auth/callback',
 ];
@@ -15,12 +15,10 @@ export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const method = req.method;
 
-  // Only apply to API routes
   if (!pathname.startsWith('/api/')) {
     return NextResponse.next();
   }
 
-  // Allow public GET routes
   if (
     method === 'GET' &&
     PUBLIC_GET_ROUTES.some(
@@ -30,7 +28,6 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Allow public POST routes (webhook)
   if (
     method === 'POST' &&
     PUBLIC_POST_ROUTES.some((route) => pathname === route)
@@ -38,7 +35,6 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Require auth token for other routes
   const authHeader = req.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
     return NextResponse.json(
@@ -49,25 +45,19 @@ export async function middleware(req: NextRequest) {
 
   try {
     const token = authHeader.substring(7);
-    const supabase = getSupabaseAdmin();
+    const payload = await verifyToken(token);
 
-    // Verify the token with Supabase
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.admin.getUserById(token);
-
-    if (error || !user) {
+    if (!payload) {
       return NextResponse.json(
         { error: 'Unauthorized — invalid token' },
         { status: 401 }
       );
     }
 
-    // Add user info to request headers for downstream use
     const requestHeaders = new Headers(req.headers);
-    requestHeaders.set('x-user-id', user.id);
-    requestHeaders.set('x-user-email', user.email || '');
+    requestHeaders.set('x-user-id', payload.userId);
+    requestHeaders.set('x-user-email', payload.email);
+    requestHeaders.set('x-user-role', payload.role);
 
     return NextResponse.next({
       request: {

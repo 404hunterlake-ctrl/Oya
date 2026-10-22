@@ -43,6 +43,7 @@ export type Database = {
           created_at?: string
           updated_at?: string
         }
+        Relationships: []
       }
       sabi_profiles: {
         Row: {
@@ -81,6 +82,15 @@ export type Database = {
           created_at?: string
           updated_at?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: 'sabi_profiles_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: true
+            referencedRelation: 'users'
+            referencedColumns: ['id']
+          }
+        ]
       }
       jobs: {
         Row: {
@@ -119,6 +129,20 @@ export type Database = {
           created_at?: string
           updated_at?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: 'jobs_client_id_fkey'
+            columns: ['client_id']
+            referencedRelation: 'users'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'jobs_sabi_id_fkey'
+            columns: ['sabi_id']
+            referencedRelation: 'users'
+            referencedColumns: ['id']
+          }
+        ]
       }
       payments: {
         Row: {
@@ -169,6 +193,20 @@ export type Database = {
           created_at?: string
           updated_at?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: 'payments_job_id_fkey'
+            columns: ['job_id']
+            referencedRelation: 'jobs'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'payments_user_id_fkey'
+            columns: ['user_id']
+            referencedRelation: 'users'
+            referencedColumns: ['id']
+          }
+        ]
       }
       reviews: {
         Row: {
@@ -195,6 +233,20 @@ export type Database = {
           comment?: string
           created_at?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: 'reviews_job_id_fkey'
+            columns: ['job_id']
+            referencedRelation: 'jobs'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'reviews_reviewer_id_fkey'
+            columns: ['reviewer_id']
+            referencedRelation: 'users'
+            referencedColumns: ['id']
+          }
+        ]
       }
     }
     Views: {
