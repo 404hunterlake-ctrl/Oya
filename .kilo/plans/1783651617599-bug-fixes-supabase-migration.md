@@ -105,3 +105,12 @@ Validation outcomes that actually ran:
 
 ### Not runtime-validated
 - Supabase-backed routes (auth/login, auth/register, auth/logout, payments/initialize, payments/verify, webhooks/paystack) and the live Paystack API — no Supabase credentials exist in this environment; they were type-checked, built and code-reviewed only.
+
+### Follow-up: build no longer depends on environment variables
+
+The Vercel preview build failed with "Failed to collect page data" because
+`lib/supabase.ts` and `lib/config.ts` validated environment variables at module
+scope, so importing them threw whenever the vars were absent. Both modules now
+resolve lazily (first use), and `lib/config.ts` validates per property — only
+`APP_URL` is required. Verified: `next build` succeeds with no Supabase vars,
+with no APP_URL, and with dummy vars (18/18 static pages, exit 0).
