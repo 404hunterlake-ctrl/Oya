@@ -2,9 +2,13 @@ import { SignJWT, jwtVerify } from 'jose';
 import bcrypt from 'bcryptjs';
 import { NextRequest } from 'next/server';
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'oya-dev-jwt-secret-fallback'
-);
+function getJwtSecret(): Uint8Array {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET is not configured');
+  }
+  return new TextEncoder().encode(secret);
+}
 
 export interface TokenPayload {
   userId: string;
@@ -30,11 +34,12 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
  * Generate a JWT token for a user
  */
 export async function generateToken(payload: TokenPayload): Promise<string> {
+  const secret = getJwtSecret();
   return new SignJWT({ ...payload })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('7d')
-    .sign(JWT_SECRET);
+    .sign(secret);
 }
 
 /**
@@ -42,13 +47,15 @@ export async function generateToken(payload: TokenPayload): Promise<string> {
  */
 export async function verifyToken(token: string): Promise<TokenPayload | null> {
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const secret = getJwtSecret();
+    const { payload } = await jwtVerify(token, secret);
     return {
       userId: payload.userId as string,
       email: payload.email as string,
       role: payload.role as string,
     };
-  } catch {
+  } catch (error) {
+    console.error('Token verification error:', error);
     return null;
   }
 }

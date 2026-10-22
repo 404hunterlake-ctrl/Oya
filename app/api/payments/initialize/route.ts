@@ -13,6 +13,25 @@ import { z } from 'zod';
 import { rateLimit } from '@/lib/rate-limit';
 import { config } from '@/lib/config';
 
+interface JobRow {
+  id: string;
+  client_id: string;
+  sabi_id: string;
+  status: string;
+  [key: string]: any;
+}
+
+interface ExistingPaymentRow {
+  id: string;
+  status: string;
+  [key: string]: any;
+}
+
+interface PaymentRow {
+  id: string;
+  [key: string]: any;
+}
+
 export async function POST(req: NextRequest) {
   try {
     // Rate limiting
@@ -52,12 +71,14 @@ export async function POST(req: NextRequest) {
       .eq('id', jobId)
       .single();
 
-    if (jobError || !job) {
+    const jobRow = job as unknown as JobRow | null;
+
+    if (jobError || !jobRow) {
       return NextResponse.json({ error: 'Job not found' }, { status: 404 });
     }
 
     // Verify user is the client
-    if (job.client_id !== user.id) {
+    if (jobRow.client_id !== user.id) {
       return NextResponse.json(
         { error: 'Only the job creator can pay for this job' },
         { status: 403 }
@@ -71,7 +92,9 @@ export async function POST(req: NextRequest) {
       .eq('job_id', jobId)
       .single();
 
-    if (existingPayment?.status === 'completed') {
+    const existingPaymentRow = existingPayment as unknown as ExistingPaymentRow | null;
+
+    if (existingPaymentRow?.status === 'completed') {
       return NextResponse.json(
         { error: 'Payment already completed for this job' },
         { status: 400 }
@@ -79,17 +102,19 @@ export async function POST(req: NextRequest) {
     }
 
     // Cancel any pending payments
-    if (existingPayment?.status === 'pending') {
+    if (existingPaymentRow?.status === 'pending') {
       await supabase
         .from('payments')
         .update({ status: 'cancelled' })
-        .eq('id', existingPayment.id);
+        .eq('id', existingPaymentRow.id);
     }
+
+    const amountInKobo = nairaToKobo(amount);
 
     // Initialize payment with Paystack
     const initResult = await paystackService.initializePayment({
       email: user.email,
-      amount,
+      amount: amountInKobo,
       jobId,
       userId: user.id,
     });
@@ -97,12 +122,11 @@ export async function POST(req: NextRequest) {
     if (initResult.status === 'error') {
       return NextResponse.json(
         { error: initResult.message },
-        { status: 500 }
+        { status: 400 }
       );
     }
 
     // Create payment record
-    const amountInKobo = nairaToKobo(amount);
     const { data: payment, error: paymentError } = await supabase
       .from('payments')
       .insert([
@@ -126,17 +150,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const paymentRow = payment as unknown as PaymentRow;
+
     return NextResponse.json({
       status: 'success',
       reference: initResult.reference,
       authorizationUrl: initResult.authorizationUrl,
       accessCode: initResult.accessCode,
-      paymentId: payment.id,
+      paymentId: paymentRow.id,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: error.errors[0].message },
+        { error: error.issues[0]?.message },
         { status: 400 }
       );
     }

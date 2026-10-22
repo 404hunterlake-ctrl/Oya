@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { CreateJobSchema } from '@/lib/validation';
+import { z } from 'zod';
 
 export async function GET(req: NextRequest) {
   try {
@@ -51,7 +53,20 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { sabiId, title, description, price, date } = body;
+    let parsed;
+    try {
+      parsed = CreateJobSchema.parse(body);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return NextResponse.json(
+          { error: err.issues[0]?.message || 'Invalid input' },
+          { status: 400 }
+        );
+      }
+      throw err;
+    }
+
+    const { sabiId, title, description, price, date } = parsed;
 
     if (!sabiId || !title) {
       return NextResponse.json(

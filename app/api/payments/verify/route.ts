@@ -11,6 +11,16 @@ import { koboToNaira } from '@/lib/payment';
 import { PaymentVerifySchema } from '@/lib/validation';
 import { z } from 'zod';
 
+interface PaymentRow {
+  id: string;
+  job_id: string;
+  user_id: string;
+  amount: number;
+  reference: string;
+  status: string;
+  [key: string]: any;
+}
+
 export async function GET(req: NextRequest) {
   try {
     // Get authenticated user
@@ -35,7 +45,7 @@ export async function GET(req: NextRequest) {
     if (verifyResult.status === 'error') {
       return NextResponse.json(
         { error: verifyResult.message },
-        { status: 500 }
+        { status: 400 }
       );
     }
 
@@ -49,7 +59,9 @@ export async function GET(req: NextRequest) {
       .eq('reference', validatedReference)
       .single();
 
-    if (paymentError || !payment) {
+    const paymentRow = payment as unknown as PaymentRow | null;
+
+    if (paymentError || !paymentRow) {
       return NextResponse.json(
         { error: 'Payment not found' },
         { status: 404 }
@@ -57,7 +69,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Verify user is the payment creator
-    if (payment.user_id !== user.id) {
+    if (paymentRow.user_id !== user.id) {
       return NextResponse.json(
         { error: 'Unauthorized to verify this payment' },
         { status: 403 }
@@ -74,7 +86,7 @@ export async function GET(req: NextRequest) {
         paid_at: isSuccess ? new Date().toISOString() : null,
         failure_reason: isSuccess ? null : 'Payment declined',
       })
-      .eq('id', payment.id);
+      .eq('id', paymentRow.id);
 
     if (updateError) {
       console.error('Payment update error:', updateError);
@@ -89,7 +101,7 @@ export async function GET(req: NextRequest) {
       const { error: jobError } = await supabase
         .from('jobs')
         .update({ status: 'accepted' })
-        .eq('id', payment.job_id);
+        .eq('id', paymentRow.job_id);
 
       if (jobError) {
         console.error('Job update error:', jobError);
@@ -100,16 +112,16 @@ export async function GET(req: NextRequest) {
       status: 'success',
       data: {
         paymentStatus: newStatus,
-        jobId: payment.job_id,
-        amount: koboToNaira(payment.amount),
-        reference: payment.reference,
+        jobId: paymentRow.job_id,
+        amount: koboToNaira(paymentRow.amount),
+        reference: paymentRow.reference,
         paidAt: isSuccess ? new Date().toISOString() : null,
       },
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: error.errors[0].message },
+        { error: error.issues[0]?.message },
         { status: 400 }
       );
     }

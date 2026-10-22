@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getUserFromRequest } from '@/lib/auth';
+import { getUserFromRequest } from '@/lib/auth-helpers';
 
 export async function GET(req: NextRequest) {
   try {
-    const userPayload = await getUserFromRequest(req);
+    const userPayload = getUserFromRequest(req);
     if (!userPayload) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const user = await prisma.user.findUnique({
-      where: { id: userPayload.userId },
+      where: { id: userPayload.id },
       include: { sabiProfile: true },
     });
 
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
       sabiProfile: user.sabiProfile
         ? {
             userId: user.sabiProfile.userId,
-            skills: user.sabiProfile.skills.split(',').filter(Boolean),
+            skills: (user.sabiProfile.skills || '').split(',').filter(Boolean),
             rating: user.sabiProfile.rating,
             verified: user.sabiProfile.verified,
             hourlyRate: user.sabiProfile.hourlyRate,

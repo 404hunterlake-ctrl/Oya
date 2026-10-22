@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { UpdateJobSchema } from '@/lib/validation';
+import { z } from 'zod';
 
 export async function GET(
   _req: NextRequest,
@@ -44,7 +46,18 @@ export async function PATCH(
 
     const { id } = await params;
     const body = await req.json();
-    const { status } = body;
+    let parsed;
+    try {
+      parsed = UpdateJobSchema.parse(body);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return NextResponse.json(
+          { error: err.issues[0]?.message || 'Invalid input' },
+          { status: 400 }
+        );
+      }
+      throw err;
+    }
 
     const job = await prisma.job.findUnique({ where: { id } });
     if (!job) {
@@ -60,9 +73,16 @@ export async function PATCH(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    const data: Record<string, unknown> = {};
+    if (parsed.title !== undefined) data.title = parsed.title;
+    if (parsed.description !== undefined) data.description = parsed.description;
+    if (parsed.price !== undefined) data.price = parsed.price;
+    if (parsed.status !== undefined) data.status = parsed.status;
+    if (parsed.date !== undefined) data.date = parsed.date ? new Date(parsed.date) : null;
+
     const updatedJob = await prisma.job.update({
       where: { id },
-      data: { status },
+      data,
       include: {
         client: { select: { id: true, name: true, email: true, location: true } },
         sabi: { select: { id: true, name: true, email: true, location: true } },

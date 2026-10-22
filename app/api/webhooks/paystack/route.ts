@@ -7,9 +7,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { paystackService } from '@/services/paystack';
 
+interface PaymentRow {
+  id: string;
+  job_id: string;
+  [key: string]: any;
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.text();
+    const rawBody = await req.text();
     const signature = req.headers.get('x-paystack-signature');
 
     // Verify webhook signature
@@ -21,7 +27,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!paystackService.verifyWebhookSignature(signature, body)) {
+    if (!paystackService.verifyWebhookSignature(signature, rawBody)) {
       console.warn('Invalid webhook signature');
       return NextResponse.json(
         { error: 'Invalid signature' },
@@ -29,7 +35,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const event = JSON.parse(body);
+    const event = JSON.parse(rawBody);
 
     if (event.event === 'charge.success') {
       const reference = event.data.reference;
@@ -41,7 +47,9 @@ export async function POST(req: NextRequest) {
         .eq('reference', reference)
         .single();
 
-      if (paymentError || !payment) {
+      const paymentRow = payment as unknown as PaymentRow | null;
+
+      if (paymentError || !paymentRow) {
         console.warn(`Payment not found for reference: ${reference}`);
         return NextResponse.json({ status: 'received' });
       }
@@ -54,7 +62,7 @@ export async function POST(req: NextRequest) {
           transaction_id: reference,
           paid_at: new Date().toISOString(),
         })
-        .eq('id', payment.id);
+        .eq('id', paymentRow.id);
 
       if (updateError) {
         console.error('Payment update error:', updateError);
@@ -65,7 +73,7 @@ export async function POST(req: NextRequest) {
       const { error: jobError } = await supabase
         .from('jobs')
         .update({ status: 'accepted' })
-        .eq('id', payment.job_id);
+        .eq('id', paymentRow.job_id);
 
       if (jobError) {
         console.error('Job update error:', jobError);
@@ -84,7 +92,9 @@ export async function POST(req: NextRequest) {
         .eq('reference', reference)
         .single();
 
-      if (paymentError || !payment) {
+      const paymentRow = payment as unknown as PaymentRow | null;
+
+      if (paymentError || !paymentRow) {
         console.warn(`Payment not found for reference: ${reference}`);
         return NextResponse.json({ status: 'received' });
       }
@@ -96,7 +106,7 @@ export async function POST(req: NextRequest) {
           status: 'failed',
           failure_reason: event.data.failure_reason || 'Payment declined',
         })
-        .eq('id', payment.id);
+        .eq('id', paymentRow.id);
 
       if (updateError) {
         console.error('Payment update error:', updateError);

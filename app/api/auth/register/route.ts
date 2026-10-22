@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { SignUpSchema } from '@/lib/validation';
 import { z } from 'zod';
+import { generateToken } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
   try {
@@ -34,9 +35,28 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const user = data.user;
+    const userRole = role || (user?.user_metadata?.role as string) || 'client';
+
+    const token = user
+      ? await generateToken({
+          userId: user.id,
+          email: user.email!,
+          role: userRole,
+        })
+      : '';
+
     return NextResponse.json(
       {
-        user: data.user,
+        user: user
+          ? {
+              id: user.id,
+              email: user.email,
+              role: userRole,
+              name: name || user.user_metadata?.name,
+            }
+          : null,
+        token,
         message: 'Sign up successful. Please check your email to verify your account.',
       },
       { status: 201 }
@@ -44,7 +64,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: error.errors[0].message },
+        { error: error.issues[0]?.message },
         { status: 400 }
       );
     }

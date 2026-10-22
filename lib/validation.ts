@@ -33,14 +33,14 @@ export const CreateJobSchema = z.object({
   title: z.string().min(3, 'Title is required').max(200),
   description: z.string().optional().default(''),
   price: z.number().int().min(0).optional().default(0),
-  scheduledDate: z.string().datetime().optional(),
+  date: z.string().datetime().optional(),
 });
 
 export const UpdateJobSchema = z.object({
   title: z.string().min(3).max(200).optional(),
   description: z.string().optional(),
   price: z.number().int().min(0).optional(),
-  scheduledDate: z.string().datetime().optional(),
+  date: z.string().datetime().optional(),
   status: z.enum(['pending', 'accepted', 'completed', 'cancelled']).optional(),
 });
 

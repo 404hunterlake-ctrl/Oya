@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
       sabiProfile: u.sabiProfile
         ? {
             userId: u.sabiProfile.userId,
-            skills: u.sabiProfile.skills.split(',').filter(Boolean),
+            skills: (u.sabiProfile.skills || '').split(',').filter(Boolean),
             rating: u.sabiProfile.rating,
             verified: u.sabiProfile.verified,
             hourlyRate: u.sabiProfile.hourlyRate,

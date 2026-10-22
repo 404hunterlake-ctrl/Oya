@@ -1,15 +1,20 @@
 import { createClient } from '@supabase/supabase-js';
 import { Database } from './database.types';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+function readSupabaseEnv(): { supabaseUrl: string; supabaseAnonKey: string } {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(
-    'Missing Supabase environment variables. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY'
-  );
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error(
+      'Missing Supabase environment variables. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY'
+    );
+  }
+
+  return { supabaseUrl, supabaseAnonKey };
 }
+
+const { supabaseUrl, supabaseAnonKey } = readSupabaseEnv();
 
 // Client for browser (anon key)
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
@@ -21,6 +26,8 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
 
 // Client for server-only operations (service role key)
 export function getSupabaseAdmin() {
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
   if (!supabaseServiceKey) {
     throw new Error('SUPABASE_SERVICE_ROLE_KEY not configured for admin operations');
   }
